@@ -1,0 +1,75 @@
+version: '3'
+services:
+  php:
+    build:
+      context: ./docker/php
+    working_dir: /var/www
+    volumes:
+      - ./laravel/:/var/www
+      - ./deployer/:/var/deployer
+      - ~/.ssh:/root/tmp/.ssh:ro
+    environment:
+      - "DB_PORT=3306"
+      - "REDIS_PORT=6379"
+      - "DB_HOST=database"
+      - "LARAVEL_SAIL=1"
+      - "SELENIUM_PORT=4444"
+    container_name: "${DOCKER_CONTAINER_NAME}_php"
+    networks:
+      - network
+  selenium:
+    image: 'selenium/standalone-chrome'
+    networks:
+      - network
+    container_name: "${DOCKER_CONTAINER_NAME}_selenium"
+  webserver:
+    build:
+      context: ./docker/nginx
+    working_dir: /var/
+    container_name: "${DOCKER_CONTAINER_NAME}_webserver"
+    volumes:
+      - ./laravel/:/var/www
+    ports:
+      - ${HOST_PORT}:80
+    networks:
+      - network
+  database:
+    image: mariadb:10.3.18
+    container_name: "${DOCKER_CONTAINER_NAME}_database"
+    volumes:
+      - dbdata:/var/lib/mysql
+    environment:
+      - "MYSQL_DATABASE=${DB_DATABASE}"
+      - "MYSQL_USER=${DB_USERNAME}"
+      - "MYSQL_PASSWORD=${DB_PASSWORD}"
+      - "MYSQL_ROOT_PASSWORD=${DB_PASSWORD}"
+    ports:
+      - ${DB_PORT}:3306
+    networks:
+      - network
+  redis:
+    image: redis:5.0.3-alpine
+    container_name: "${DOCKER_CONTAINER_NAME}_redis"
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD}"
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - network
+  node:
+    image: node:14-alpine
+    container_name: "${DOCKER_CONTAINER_NAME}_node"
+    working_dir: /var/www
+    volumes:
+      - ./laravel:/var/www
+    tty: true
+    depends_on:
+      - 'php'
+volumes:
+  dbdata:
+  redis:
+networks:
+  network:
+    name: "${DOCKER_CONTAINER_NAME}_network"
+    driver: bridge
